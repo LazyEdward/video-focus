@@ -1,0 +1,120 @@
+body {
+	 margin: 0;
+	 overflow: hidden;
+}
+
+.debug_page {
+	overflow: hidden;
+	color: #343677;
+	background: linear-gradient(0deg, #AEF7F7 0%, #22AEB4 100%);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	width: 100vw;
+	height: 100vh;
+}
+
+.debug_frame {
+	overflow: hidden;
+	border-radius: 16px;
+	background-color: #FFFFFF;
+	box-shadow: 3px 3px 5px #000000aa;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	width: calc(100% - 40px);
+	height: calc(100% - 40px);
+}
+
+.debug_container {
+	width: calc(100% - 40px);
+	display: flex;
+	justify-content: space-around;
+	align-items: center;
+	margin: 20px;
+	overflow: auto;
+}
+
+@media only screen and (max-width: 1105px){
+	.debug_container {
+		flex-direction: column;
+		justify-content: center;
+	}
+}
+
+.debug_header {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	padding: 10px;
+}
+
+.video_container {
+	position: relative;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	width: 640px;
+	height: 480px;
+}
+
+.debug_info {
+	display: flex;
+	flex-shrink: 0;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	font-size: 16px;
+	width: 300px;
+	background-color: #FFFFFF;
+	box-shadow: inset -2px -2px 5px #000000aa;
+	padding: 20px;
+	margin: 20px;
+	border: 2px solid #00000000;
+	border-radius: 16px;
+}
+
+@media only screen and (max-width: 1105px){
+	.debug_info {
+		width: calc(100% - 80px);
+	}
+}
+
+
+.debug_info_list_item {
+	display: flex;
+	width: 100%;
+	justify-content: space-between;
+	align-items: center;
+	padding-bottom: 2px;
+}
+
+#webcam_face_tracker {
+	background-color: #000000;
+}
+
+#webcam_face_canvas {
+	position: absolute;
+	top: 0;
+	left: 0;
+	margin: 0;
+}
+
+#webcam_face_tracker_inactive {
+	position: absolute;
+	margin: 0;
+	top: 50%;
+	left: 50%;
+	color: #FFFFFF;
+	transform: translate(-50%, -50%);
+	font-size: 16px;
+}
+
+#detection_status {
+	width: 15px;
+	height: 15px;
+	border-radius: 9999px;
+	box-shadow: 3px 3px 10px #000000aa
+}

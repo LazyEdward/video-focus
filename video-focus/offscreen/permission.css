@@ -1,0 +1,24 @@
+body {
+	margin: 0;
+	overflow: hidden;
+	background: linear-gradient(0deg, #AEF7F7 0%, #22AEB4 100%);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	width: 100vw;
+	height: 100vh;
+}
+
+.debug_container {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	border-radius: 16px;
+	color: #343677;
+	background-color: #FFFFFF;
+	box-shadow: 3px 3px 5px #000000aa;
+	overflow: hidden;
+	width: calc(100% - 40px);
+	height: calc(100% - 40px);	
+}

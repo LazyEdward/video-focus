@@ -1,0 +1,55 @@
+<!--
+ Copyright (c) 2024 LazyEdward
+ 
+ This software is released under the MIT License.
+ https://opensource.org/licenses/MIT
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" crossorigin href="./tracker.css">
+	<script type="module" crossorigin src="./detector_session.js"></script>
+	<title>Webcam Tracker</title>
+</head>
+<body>
+	<div class="debug_page">
+		<div class="debug_frame">
+			<div class="debug_header">
+				<h1>Face tracking config</h1>
+			</div>
+			<div class="debug_container">
+				<div class="video_container">
+					<video id="webcam_face_tracker" autoplay muted width="640" height="480"></video>
+					<canvas id="webcam_face_canvas" width="640" height="480"></canvas>
+					<div id="webcam_face_tracker_inactive">Face Tracking is currently not available</div>
+				</div>
+				<div class="debug_info">
+					<div class="debug_info_list_item">
+						<h3>Status: </h3>
+						<span id="detection_status"></span>
+					</div>
+					<div class="debug_info_list_item">
+						<h3>Detector: </h3>
+						<span id="default_detector_value">Loading...</span>
+					</div>
+					<div class="debug_info_list_item">
+						<h3>Input Size: </h3>
+						<span id="input_size_value">Loading...</span>
+					</div>
+					<div class="debug_info_list_item">
+						<h3>Score threshold: </h3>
+						<span id="score_threshold_value">Loading...</span>
+					</div>
+					<div class="debug_info_list_item">
+						<h3>Min confidence: </h3>
+						<span id="min_confidence_value">Loading...</span>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</body>
+</html>
