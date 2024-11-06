@@ -10,7 +10,7 @@
 	},
 	"host_permissions": ["<all_urls>"],
 	"web_accessible_resources": [{
-		"resources": ["tracker.html", "offscreen/permission.html", "detector_session.js", "lib/face-api.min.js", "lib/tiny_face_detector_model.weights", "lib/ssd_mobilenetv1.weights", "lib/controller.js"],
+		"resources": ["tracker.html", "offscreen/permission.html", "detector_session.js", "lib/face-api.min.js", "lib/tiny_face_detector_model.weights", "lib/ssd_mobilenetv1.weights"],
 		"matches": ["<all_urls>"]
 	}],
 	"action": {

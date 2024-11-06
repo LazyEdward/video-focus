@@ -4,11 +4,30 @@
   import SwitchListItem from './components/SwitchListItem.vue'
   import SelectListItem from './components/SelectListItem.vue'
   import CounterListItem from './components/CounterListItem.vue'
-import LinkItem from './components/LinkItem.vue'
-import LoadingOverlay from './components/LoadingOverlay.vue'
+  import LinkItem from './components/LinkItem.vue'
+  import LoadingOverlay from './components/LoadingOverlay.vue'
 
-  type TVideoFocusStorage = {
+  type TVideoFocusReadStorage = {
     "video-focus.paused": boolean,
+    "video-focus.tabPauseMapping": Record<number,boolean>,
+    "video-focus.activeTab": number,
+    "video-focus.trackingAvailable": boolean,
+    "video-focus.defaultDetector": string,
+    "video-focus.inputSize": number,
+    "video-focus.scoreThreshold": number,
+    "video-focus.minConfidence": number,
+    "video-focus.enableFaceTrackng": boolean,
+    "video-focus.enableFaceTrackngFullScreenOnly": boolean,
+    "video-focus.autoPlay": boolean,
+    "video-focus.autoPauseOnFullScreenChange": boolean,
+    "video-focus.autoPauseOnSwitchTab": boolean,
+    "video-focus.autoResume": boolean,
+  }
+
+  type TVideoFocusUpdateStorage = {
+    "video-focus.paused": boolean,
+    "video-focus.tabPauseMapping": Record<number,boolean>,
+    "video-focus.trackingAvailable": boolean,
     "video-focus.defaultDetector": string,
     "video-focus.inputSize": number,
     "video-focus.scoreThreshold": number,
@@ -28,7 +47,12 @@ import LoadingOverlay from './components/LoadingOverlay.vue'
   const loading = ref(false)
   const hasChange = ref(false)
 
+  const disableOnThisTab = ref(false)
+
   const paused = ref(false)
+  const activeTab = ref(-1)
+  const tabPauseMapping = ref<Record<string,boolean>>({})
+  const trackingAvailable = ref(false)
   const defaultDetector = ref('tiny_face')
   const inputSize = ref(224)
   const scoreThreshold = ref(0.5)
@@ -51,7 +75,7 @@ import LoadingOverlay from './components/LoadingOverlay.vue'
     })
   }
 
-  const setVideoFocusStorage = (settings: TVideoFocusStorage) : Promise<void> => {
+  const setVideoFocusStorage = (settings: TVideoFocusUpdateStorage) : Promise<void> => {
     return new Promise((resolve) => {
       chrome.runtime.sendMessage({
         type: 'settings',
@@ -61,10 +85,13 @@ import LoadingOverlay from './components/LoadingOverlay.vue'
     })
   }
 
-  const getVideoFocusStorage = () : Promise<TVideoFocusStorage | null> => {
+  const getVideoFocusStorage = () : Promise<TVideoFocusReadStorage | null> => {
     return new Promise((resolve) => {
       chrome.storage.local.get([
         'video-focus.paused',
+        'video-focus.tabPauseMapping',
+        'video-focus.activeTab',
+        'video-focus.trackingAvailable',
         "video-focus.defaultDetector",
         'video-focus.inputSize',
         'video-focus.scoreThreshold',
@@ -76,8 +103,14 @@ import LoadingOverlay from './components/LoadingOverlay.vue'
         'video-focus.autoPauseOnSwitchTab',
         'video-focus.autoResume',
       ]).then((storage) => {
-          resolve(storage ? {
+        if(chrome.runtime.lastError)
+          console.log(`chrome.storage.local: ${chrome.runtime.lastError.message}`);
+
+        resolve(storage ? {
           'video-focus.paused': storage['video-focus.paused'],
+          'video-focus.tabPauseMapping': storage['video-focus.tabPauseMapping'],
+          'video-focus.activeTab': storage['video-focus.activeTab'],
+          'video-focus.trackingAvailable': storage['video-focus.trackingAvailable'],
           "video-focus.defaultDetector": storage['video-focus.defaultDetector'],
           'video-focus.inputSize': storage['video-focus.inputSize'],
           'video-focus.scoreThreshold': storage['video-focus.scoreThreshold'],
@@ -97,6 +130,18 @@ import LoadingOverlay from './components/LoadingOverlay.vue'
     if(changes['video-focus.faceDetectionFocus'] !== undefined){
       faceDetectionFocus.value = changes['video-focus.faceDetectionFocus'].newValue;
     }
+    if(changes['video-focus.tabPauseMapping'] !== undefined || changes['video-focus.activeTab'] !== undefined){
+      if(changes['video-focus.tabPauseMapping'] !== undefined)
+        tabPauseMapping.value = changes['video-focus.tabPauseMapping'].newValue;
+      if(changes['video-focus.activeTab'] !== undefined)
+        activeTab.value = changes['video-focus.activeTab'].newValue;
+      
+      disableOnThisTab.value = !!tabPauseMapping.value[``+activeTab.value]
+    }
+
+    if(changes['video-focus.trackingAvailable'] !== undefined){
+      trackingAvailable.value = changes['video-focus.trackingAvailable'].newValue;
+    }
   }
 
   const setHasChange = (callback: () => void) => {
@@ -111,6 +156,9 @@ import LoadingOverlay from './components/LoadingOverlay.vue'
 
     if(settings){
       paused.value = settings?.['video-focus.paused'] !== undefined ? settings['video-focus.paused'] : paused.value
+      activeTab.value = settings?.['video-focus.activeTab'] !== undefined ? settings['video-focus.activeTab'] : activeTab.value
+      tabPauseMapping.value = settings?.['video-focus.tabPauseMapping'] !== undefined ? settings['video-focus.tabPauseMapping'] : tabPauseMapping.value
+      trackingAvailable.value = settings?.['video-focus.trackingAvailable'] !== undefined ? settings['video-focus.trackingAvailable'] : trackingAvailable.value
       defaultDetector.value = settings?.['video-focus.defaultDetector'] !== undefined ? settings['video-focus.defaultDetector'] : defaultDetector.value
       inputSize.value = settings?.['video-focus.inputSize'] !== undefined ? settings['video-focus.inputSize'] : inputSize.value
       scoreThreshold.value = settings?.['video-focus.scoreThreshold'] !== undefined ? settings['video-focus.scoreThreshold'] : scoreThreshold.value
@@ -121,6 +169,8 @@ import LoadingOverlay from './components/LoadingOverlay.vue'
       autoPauseOnFullScreenChange.value = settings?.['video-focus.autoPauseOnFullScreenChange'] !== undefined ? settings['video-focus.autoPauseOnFullScreenChange'] : autoPauseOnFullScreenChange.value
       autoPauseOnSwitchTab.value = settings?.['video-focus.autoPauseOnSwitchTab'] !== undefined ? settings['video-focus.autoPauseOnSwitchTab'] : autoPauseOnSwitchTab.value
       autoResume.value = settings?.['video-focus.autoResume'] !== undefined ? settings['video-focus.autoResume'] : autoResume.value
+
+      disableOnThisTab.value = !!tabPauseMapping.value[``+activeTab.value]
     }
 
     hasChange.value = false;
@@ -132,6 +182,9 @@ import LoadingOverlay from './components/LoadingOverlay.vue'
 
     console.log({
       'video-focus.paused': paused.value,
+      'video-focus.activeTab': activeTab.value,
+      'video-focus.tabPauseMapping': tabPauseMapping.value,
+      'video-focus.trackingAvailable': trackingAvailable.value,
       'video-focus.defaultDetector': defaultDetector.value,
       'video-focus.inputSize': inputSize.value,
       'video-focus.scoreThreshold': scoreThreshold.value,
@@ -144,8 +197,22 @@ import LoadingOverlay from './components/LoadingOverlay.vue'
       'video-focus.autoResume': autoResume.value,
     })
 
+    let updateTabPauseMapping = {...tabPauseMapping.value}
+
+    if(disableOnThisTab.value){
+      if(!tabPauseMapping.value[``+activeTab.value])
+        updateTabPauseMapping[``+activeTab.value] = true
+    }
+    else{
+      if(tabPauseMapping.value[``+activeTab.value]){
+        updateTabPauseMapping[``+activeTab.value] = false
+      }
+    }
+
     await setVideoFocusStorage({
         'video-focus.paused': paused.value,
+        'video-focus.tabPauseMapping': updateTabPauseMapping,
+        'video-focus.trackingAvailable': trackingAvailable.value,
         'video-focus.defaultDetector': defaultDetector.value,
         'video-focus.inputSize': inputSize.value,
         'video-focus.scoreThreshold': scoreThreshold.value,
@@ -182,13 +249,23 @@ import LoadingOverlay from './components/LoadingOverlay.vue'
 <template>
   <div class="layout">
     <LoadingOverlay :show="loading"/>
-    <div class="header"> Video Focus Settings </div>
+    <div class="header"> Video Focus Settings {{ activeTab }} </div>
     <div class="settings">
       <SwitchListItem
-        name="Disabled all features"
+        name="Disable all features"
         :value="paused"
         :change="(value) => setHasChange(() => paused = value)"
       />
+      <SubTitleExpandable
+        name="Local Setting"
+      >
+        <SwitchListItem
+          name="Disable on current tab"
+          :disabled="activeTab === -1"
+          :value="disableOnThisTab"
+          :change="(value) => setHasChange(() => disableOnThisTab = value)"
+        />
+      </SubTitleExpandable>
       <SubTitleExpandable
         name="Play Setting"
       >
@@ -229,7 +306,7 @@ import LoadingOverlay from './components/LoadingOverlay.vue'
           :open="onRequestDebugPage"
         />
         <SwitchListItem
-          name="In fullScreen mode Only"
+          name="In Full Screen Only"
           :disabled="paused || !enableFaceTrackng"
           :value="enableFaceTrackngFullScreenOnly"
           :change="(value) => setHasChange(() => enableFaceTrackngFullScreenOnly = value)"

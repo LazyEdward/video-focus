@@ -5,6 +5,7 @@
 
 try{
 
+	let activeTab = -1;
 	let permissionTab = -1;
 	let creatingOffscreen = null;
 
@@ -23,11 +24,23 @@ try{
 			await requestPermission();
 		}
 
-		chrome.tabs.create({ url: 'tracker.html' });
+		chrome.tabs.create({ url: 'tracker.html' }, () => {
+			if(chrome.runtime.lastError){
+				console.log(`chrome.tabs.create: ${chrome.runtime.lastError.message}`);
+			}
+		});
 	}
 
 	const requestPermission = async() => {
-		chrome.tabs.create({ url: 'offscreen/permission.html' }, (tab) =>  permissionTab = tab.id);
+		chrome.tabs.create({ url: 'offscreen/permission.html' }, (tab) => {
+			if(chrome.runtime.lastError){
+				console.log(`chrome.tabs.create: ${chrome.runtime.lastError.message}`);
+				permissionTab = -1
+				return;
+			}
+
+			permissionTab = parseInt(tab.id)
+		});
 	}
 
 	// https://developer.chrome.com/docs/extensions/reference/api/offscreen
@@ -77,6 +90,9 @@ try{
 			'video-focus.autoPauseOnSwitchTab',
 			'video-focus.autoResume',
 		]).then(async(storage) => {
+			if(chrome.runtime.lastError)
+				console.log(`chrome.storage.local: ${chrome.runtime.lastError.message}`);
+
 			if(!storage){
 				chrome.storage.local.set({
 					"video-focus.paused": paused,
@@ -140,7 +156,7 @@ try{
 					chrome.storage.local.set({ "video-focus.autoResume": true });
 			}
 			
-			chrome.storage.local.set({ "video-focus.faceDetectionFocus": false });
+			chrome.storage.local.set({ "video-focus.activeTab": -1, "video-focus.tabPauseMapping": {}, "video-focus.faceDetectionFocus": false, "video-focus.trackingAvailable": false });
 			permissionTab = -1
 			hasPermission = false
 
@@ -148,74 +164,108 @@ try{
 			await requestPermission();
 		})
 	}
-	
-	// const testSetTimeout = () => {
-	// 	console.log(`Test setTimeout ${Date.now()}`)
-	// 	setTimeout(() => testSetTimeout())
-	// }
 
 	// https://stackoverflow.com/questions/25004260/welcome-page-loads-when-allow-in-incognito-is-checked-unchecked-in-chrome
 	chrome.runtime.onInstalled.addListener(async(details) => {
+		if(chrome.runtime.lastError){
+			console.log(`chrome.runtime.onInstalled: ${chrome.runtime.lastError.message}`);
+			return;
+		}
+
 		console.log("Background Start Up");
 		if(details.reason !== "install" && details.reason !== "update") return;
 		await init()
-		// testSetTimeout();
+		
+		chrome.tabs.query({}, async(tabs) => {
+			for(let tab of tabs){				
+				if (tab.status === "complete"){
+					if(tab.url.startsWith("http://") || tab.url.startsWith("https://")){
+						await chrome.scripting.executeScript({
+							target: { tabId: tab.id },
+							args: [tab.id],
+							func: (id) => {
+								window.tabId = id;
+							}
+						});
+						chrome.scripting.executeScript({ target: { tabId: tab.id }, files : [ "content.js" ], }).then(() => {
+							if(chrome.runtime.lastError)
+								console.log(`chrome.scripting.executeScript: ${chrome.runtime.lastError.message}`);
+							else
+								console.log("content script injected")
+						});
+
+						if(tab.active)
+							chrome.storage.local.set({ "video-focus.activeTab": tab.id });						
+					}
+				}
+			}
+		})
 	})
 	
 	chrome.tabs.onUpdated.addListener(async(tabId, changeInfo, tab) => {
+		if(chrome.runtime.lastError){
+			console.log(`chrome.tabs.onUpdated: ${chrome.runtime.lastError.message}`);
+			return;
+		}
+
+		
 		if (changeInfo.status === "complete"){
-			if(tab.url.startsWith("http://") || tab.url.startsWith("https://"))
-				chrome.scripting.executeScript({ target: { tabId }, files : [ "content.js" ], }).then(() => console.log("content script injected"));
+			if(tab.url.startsWith("http://") || tab.url.startsWith("https://")){
+				await chrome.scripting.executeScript({
+					target: { tabId },
+					args: [tabId],
+					func: (id) => {
+						window.tabId = id;
+					}
+				});
+				chrome.scripting.executeScript({ target: { tabId }, files : [ "content.js" ], }).then(() => {
+					if(chrome.runtime.lastError)
+						console.log(`chrome.scripting.executeScript: ${chrome.runtime.lastError.message}`);
+					else
+						console.log("content script injected")
+				});
+
+				if(tab.active)
+					chrome.storage.local.set({ "video-focus.activeTab": tabId });
+				else
+					chrome.storage.local.set({ "video-focus.activeTab": -1 });
+			}
+			// else{
+			// 	chrome.storage.local.set({ "video-focus.trackingAvailable": false });
+			// }
 		}
 	})
 
-	// chrome.storage.onChanged.addListener(async(changes, area) => {
-	// 	console.log(changes)
-	// })
+	chrome.tabs.onActivated.addListener((activeInfo) => {
+		if(chrome.runtime.lastError){
+			console.log(`chrome.tabs.onActivated: ${chrome.runtime.lastError.message}`);
+			return;
+		}
 
-	chrome.runtime.onMessage.addListener((req, sender, sendRes) => {
-		try{
-			if (chrome.runtime.lastError)
-				throw Error('chrome.runtime.lastError');
+		chrome.tabs.get(activeInfo.tabId, (tab) => {
+			if(chrome.runtime.lastError){
+				console.log(`chrome.tabs.get: ${chrome.runtime.lastError.message}`);
+				return;
+			}	
 
-			if(req.target === "video-focus.permissionGranted"){
-				console.log("video-focus.permissionGranted")
-				if(req.data){
-					chrome.tabs.remove(permissionTab)
-					permissionTab = -1
-					hasPermission = true
-
-					if(!paused && enableFaceTrackng){			
-						if(hasPermission){
-							chrome.storage.local.get([
-								'video-focus.paused',
-								"video-focus.defaultDetector",
-								'video-focus.inputSize',
-								'video-focus.scoreThreshold',
-								"video-focus.minConfidence",
-								'video-focus.enableFaceTrackng',
-								'video-focus.enableFaceTrackngFullScreenOnly',
-								'video-focus.autoPlay',
-								'video-focus.autoPauseOnFullScreenChange',
-								'video-focus.autoPauseOnSwitchTab',
-								'video-focus.autoResume',
-							]).then(async(storage) => {
-								chrome.runtime.sendMessage({
-									type: 'initSettings',
-									target: 'video-focus.initSettings',
-									data: JSON.stringify(storage)
-								})
-							})
-						}
-					}
-				}
-				else
-					hasPermission = false
+			if(tab.url.startsWith("http://") || tab.url.startsWith("https://")){
+				console.log(tab)
+				chrome.storage.local.set({ "video-focus.activeTab": activeInfo.tabId });
 			}
+			else{
+				chrome.storage.local.set({ "video-focus.activeTab": -1 });
+			}
+		})
+	})
 
-			if(req.target === 'video-focus.fetchSetting' && hasPermission){
+	chrome.storage.onChanged.addListener(async(changes, area) => {
+		console.log(changes)
+
+		if(changes['video-focus.enableFaceTrackng'] || changes['video-focus.trackingAvailable']){
+			if(hasPermission){
 				chrome.storage.local.get([
 					'video-focus.paused',
+					'video-focus.trackingAvailable',
 					"video-focus.defaultDetector",
 					'video-focus.inputSize',
 					'video-focus.scoreThreshold',
@@ -227,34 +277,121 @@ try{
 					'video-focus.autoPauseOnSwitchTab',
 					'video-focus.autoResume',
 				]).then(async(storage) => {
+					if(chrome.runtime.lastError)
+						console.log(`chrome.storage.local: ${chrome.runtime.lastError.message}`);
+	
 					chrome.runtime.sendMessage({
-						type: 'initSettings',
-						target: 'video-focus.initSettings',
+						type: 'updateSettings',
+						target: 'video-focus.updateSettings',
 						data: JSON.stringify(storage)
 					})
 				})
 			}
+		}
+	})
 
-			if(req.target === "video-focus.updateSettings"){
-				let data = JSON.parse(req.data);
-				if(!hasPermission && !data['video-focus.paused'] && data['video-focus.enableFaceTrackng'])
-					requestPermission()
+	chrome.runtime.onMessage.addListener((req, sender, sendRes) => {
 
-				chrome.storage.local.set(data)
+		if(chrome.runtime.lastError){
+			console.log(`chrome.runtime.onMessage: ${chrome.runtime.lastError.message}`);
+			return;
+		}
+
+		if(req.target === "video-focus.permissionGranted"){
+			console.log("video-focus.permissionGranted")
+			if(permissionTab !== -1 && req.data){
+				chrome.tabs.get(permissionTab, () => {
+					if(chrome.runtime.lastError){
+						console.log(`chrome.tabs.get: ${chrome.runtime.lastError.message}`);
+					}
+					else{
+						chrome.tabs.remove(permissionTab, () => {
+							if(chrome.runtime.lastError)
+								console.log(`chrome.tabs.remove: ${chrome.runtime.lastError.message}`);
+						})
+					}
+					
+					permissionTab = -1
+					hasPermission = true
+	
+					if(!paused && enableFaceTrackng){			
+						if(hasPermission){
+							chrome.storage.local.get([
+								'video-focus.paused',
+								'video-focus.trackingAvailable',
+								"video-focus.defaultDetector",
+								'video-focus.inputSize',
+								'video-focus.scoreThreshold',
+								"video-focus.minConfidence",
+								'video-focus.enableFaceTrackng',
+								'video-focus.enableFaceTrackngFullScreenOnly',
+								'video-focus.autoPlay',
+								'video-focus.autoPauseOnFullScreenChange',
+								'video-focus.autoPauseOnSwitchTab',
+								'video-focus.autoResume',
+							]).then(async(storage) => {
+								if(chrome.runtime.lastError)
+									console.log(`chrome.storage.local: ${chrome.runtime.lastError.message}`);
+	
+								chrome.runtime.sendMessage({
+									type: 'initSettings',
+									target: 'video-focus.initSettings',
+									data: JSON.stringify(storage)
+								})
+							})
+						}
+					}
+				})
 			}
-
-			if(req.target === "video-focus.faceDetectionFocus")
-				chrome.storage.local.set({ "video-focus.faceDetectionFocus": req.data });
-
-			if(req.target === "video-focus.requestDebugPage")
-				requestDebugPage()
-
-			if(req.target === "video-focus.keepAlivePing")
-				console.log("video-focus.keepAlivePing");
+			else
+				hasPermission = false
 		}
-		catch(e){
-			console.log(e)
+
+		if(req.target === 'video-focus.fetchSetting' && hasPermission){
+			chrome.storage.local.get([
+				'video-focus.paused',
+				'video-focus.trackingAvailable',
+				"video-focus.defaultDetector",
+				'video-focus.inputSize',
+				'video-focus.scoreThreshold',
+				"video-focus.minConfidence",
+				'video-focus.enableFaceTrackng',
+				'video-focus.enableFaceTrackngFullScreenOnly',
+				'video-focus.autoPlay',
+				'video-focus.autoPauseOnFullScreenChange',
+				'video-focus.autoPauseOnSwitchTab',
+				'video-focus.autoResume',
+			]).then(async(storage) => {
+				if(chrome.runtime.lastError)
+					console.log(`chrome.storage.local: ${chrome.runtime.lastError.message}`);
+
+				chrome.runtime.sendMessage({
+					type: 'initSettings',
+					target: 'video-focus.initSettings',
+					data: JSON.stringify(storage)
+				})
+			})
 		}
+
+		if(req.target === "video-focus.updateSettings"){
+			let data = JSON.parse(req.data);
+			console.log("updateSettings")
+			console.log(data)
+			if(!hasPermission && !data['video-focus.paused'] && data['video-focus.enableFaceTrackng'])
+				requestPermission()
+
+			chrome.storage.local.set(data)
+		}
+
+		if(req.target === "video-focus.faceDetectionFocus")
+			chrome.storage.local.set({ "video-focus.faceDetectionFocus": req.data });
+
+		if(req.target === "video-focus.requestDebugPage")
+			requestDebugPage()
+
+		if(req.target === "video-focus.keepAlivePing")
+			console.log("video-focus.keepAlivePing");
+	
 	});
 
 }

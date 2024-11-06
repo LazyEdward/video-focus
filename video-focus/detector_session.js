@@ -13,10 +13,12 @@
 console.log('run detector')
 
 let init = false;
-let activeDetection = -1;
+let activeDetection = 0;
 
 let isFocus = null;
 let stream = null;
+
+let isEnabled = false
 
 let defaultDetector = "tiny_face"
 
@@ -53,8 +55,11 @@ const keepAlivePing = () => {
 const detectFocus = async(update) => {
 
 	if(!init || !stream || !videoEle || videoEle.paused || videoEle.ended){
-		if(activeDetection)
+		if(activeDetection){
 			clearTimeout(activeDetection)
+			activeDetection = 0
+		}
+
 		activeDetection = setTimeout(async() => await detectFocus(update))
 		return;
 	}
@@ -101,8 +106,10 @@ const detectFocus = async(update) => {
 		console.log(e)
 	}
 	finally{
-		if(activeDetection)
+		if(activeDetection){
 			clearTimeout(activeDetection)
+			activeDetection = 0
+		}
 
 		activeDetection = setTimeout(async() => await detectFocus(update));
 	}
@@ -192,10 +199,10 @@ const startUp = async(data) => {
 	if(init)
 		return;
 
-	defaultDetector = data['video-focus.defaultDetector'];
-	inputSize = data['video-focus.inputSize'];
-	scoreThreshold = data['video-focus.scoreThreshold'];
-	minConfidence = data['video-focus.minConfidence'];
+	defaultDetector = data?.['video-focus.defaultDetector'] ?? defaultDetector;
+	inputSize = data?.['video-focus.inputSize'] ?? inputSize;
+	scoreThreshold = data?.['video-focus.scoreThreshold'] ?? scoreThreshold;
+	minConfidence = data?.['video-focus.minConfidence'] ?? minConfidence;
 
 	init = true
 	
@@ -204,8 +211,10 @@ const startUp = async(data) => {
 
 	createDebugContainer();
 
-	if(activeDetection)
+	if(activeDetection){
 		clearTimeout(activeDetection)
+		activeDetection = 0
+	}
 
 	activeDetection = detectFocus((result) => {
 
@@ -223,15 +232,17 @@ const update = async(data) => {
 	if(init)
 		return;
 
-	defaultDetector = data['video-focus.defaultDetector'];
-	inputSize = data['video-focus.inputSize'];
-	scoreThreshold = data['video-focus.scoreThreshold'];
-	minConfidence = data['video-focus.minConfidence'];
+	defaultDetector = data?.['video-focus.defaultDetector'] ?? defaultDetector;
+	inputSize = data?.['video-focus.inputSize'] ?? inputSize;
+	scoreThreshold = data?.['video-focus.scoreThreshold'] ?? scoreThreshold;
+	minConfidence = data?.['video-focus.minConfidence'] ?? minConfidence;
 
 	updateDebugContainer()
 
-	if(activeDetection)
+	if(activeDetection){
 		clearTimeout(activeDetection)
+		activeDetection = 0
+	}
 
 	activeDetection = detectFocus((result) => {
 
@@ -246,8 +257,10 @@ const update = async(data) => {
 
 const cleanUp = async() => {
 	console.log('On clean up')
-	if(activeDetection)
+	if(activeDetection){
 		clearTimeout(activeDetection)
+		activeDetection = 0
+	}
 
 	if(!eleInactiveWarning){
 		eleInactiveWarning = document.getElementById('webcam_face_tracker_inactive');
@@ -314,34 +327,33 @@ const loadFocusDetection = async() => {
 
 
 	chrome.runtime.onMessage.addListener((req, sender, sendRes) => {
-		try{
-			if (chrome.runtime.lastError)
-				throw Error('chrome.runtime.lastError');
-				
-			console.log(req)
+		if(chrome.runtime.lastError){
+			console.log(`chrome.runtime.onMessage: ${chrome.runtime.lastError.message}`);
+			return;
+		}
+			
+		console.log(req)
 
-			if(req.target === "video-focus.initSettings" || req.target === "video-focus.updateSettings"){
-				let data = JSON.parse(req.data);
+		if(req.target === "video-focus.initSettings" || req.target === "video-focus.updateSettings"){
+			let data = JSON.parse(req.data);
 
-				if(init){
-					if(data['video-focus.paused'] || !data['video-focus.enableFaceTrackng']){
-						cleanUp()
-					}
-					else{
-						update(JSON.parse(req.data))
-					}
-				}
-				else{
-					if(!data['video-focus.paused'] && data['video-focus.enableFaceTrackng']){
-						startUp(JSON.parse(req.data))
-					}
-				}
+			isEnabled = !data['video-focus.paused'] 
+				&& data['video-focus.trackingAvailable']
+				&& data['video-focus.enableFaceTrackng']
+
+			if(init){
+				if(isEnabled)
+					update(JSON.parse(req.data))
+				else
+					cleanUp()
 			}
+			else{
+				if(isEnabled)
+					startUp(JSON.parse(req.data))
+			}
+		}
 
-		}
-		catch(e){
-			console.log(e)
-		}
+
 	});
 	
 	initFetchSetting();

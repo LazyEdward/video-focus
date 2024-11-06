@@ -17,11 +17,14 @@ try{
 	let currentLocation = ''
 
 	let switchInteract = false
-	let interact = false
+	let initInteract = false
 	let isFullscreen = false
 	let isVisible = false
 
+	let existingVideos = null;
+
 	let paused = false;
+	let tabPauseMapping = {}
 	let autoPlay = false;
 	let autoPauseOnFullScreenChange = true;
 	let autoPauseOnSwitchTab = true;
@@ -31,36 +34,118 @@ try{
 	let enableFaceTrackngFullScreenOnly = true;
 	let faceDetectionFocus = false;
 
+	const searchVideos = () => {
+		return document.getElementsByTagName('video') ?? []
+	}
+	
+	const searchFullscreenVideos = () => {
+		return document.fullscreenElement?.getElementsByTagName('video') ?? []
+	}
+	
+	const playOrResumeVideoElement = (video, focused) => {
+		if(!video.getAttribute("muted"))
+			video.setAttribute("muted", "false");
+	
+		if(video.ended)
+			return;
+	
+		try{
+			if(focused){
+				if(video.paused)
+					video.play()
+			}
+			else if(!video.paused)
+				video.pause()
+		}
+		catch(e){
+			console.log(e)
+		}
+	}
+	
+	// const focusOnOffFullscreenVideo = (focused) => {
+	// 	if(!document.fullscreenElement){
+	// 		for(const video of existingVideos)
+	// 			playOrResumeVideoElement(video, false)
+	// 			existingVideos = [];
+	// 		return;
+	// 	}
+	
+	// 	if(!videos || videos.length < 1)
+	// 		videos = searchFullscreenVideos();
+	
+	// 	for(const video of videos)
+	// 		playOrResumeVideoElement(video, focused)
+	// }
+	
+	const focusOnOffVideo = (focused) => {
+		for(const video of existingVideos)
+			playOrResumeVideoElement(video, focused)
+	}
+	
+	const pageInit = (trackable) => {
+		if(chrome.runtime.id == undefined) return;
+
+		chrome.storage.local.set({
+			"video-focus.trackingAvailable": trackable
+		});
+	}
+	
+	const setIsTrackable = (trackable) => {
+		if(chrome.runtime.id == undefined) return;
+		
+		chrome.storage.local.set({ "video-focus.trackingAvailable": trackable });
+	}
+
 	const checkIsWebCamOn = async() => {
 		let devices = await navigator.mediaDevices.enumerateDevices();
 
 		for(let device of devices){
-			if(!!device.deviceId)
+			if(!!device.deviceId && (device.kind === "videoinput"))
 				return true;
 		}
 
 		return false;
 	}
 
-	const frameListener = (focusOnOffFullscreenVideo, focusOnOffVideo, searchVideos, searchFullscreenVideos) => {
+	const frameListener = () => {
 		if(paused){
-			setTimeout(() => frameListener(focusOnOffFullscreenVideo, focusOnOffVideo, searchVideos, searchFullscreenVideos));
+			setTimeout(() => frameListener());
+			return;
+		}
+
+		console.log(tabPauseMapping, window.tabId, tabPauseMapping[window.tabId])
+		if(!!tabPauseMapping && !!window.tabId && tabPauseMapping[window.tabId]){
+			setTimeout(() => frameListener());
 			return;
 		}
 
 		if(!autoPlay){
 			if(currentLocation !== window.location.href){
-				interact = false;
+				initInteract = false;
+				existingVideos = searchVideos();
+				setIsTrackable(existingVideos.length > 0)
 				currentLocation = window.location.href;
-				setTimeout(() => frameListener(focusOnOffFullscreenVideo, focusOnOffVideo, searchVideos, searchFullscreenVideos));
+				setTimeout(() => frameListener());
 				return;
 			}
 	
-			if(!interact){
+			if(!initInteract){
 				focusOnOffVideo(false);
-				setTimeout(() => frameListener(focusOnOffFullscreenVideo, focusOnOffVideo, searchVideos, searchFullscreenVideos));
+				setTimeout(() => frameListener());
 				return;
 			}
+		}
+		else{
+			if(currentLocation !== window.location.href){
+				existingVideos = searchVideos();
+				setIsTrackable(existingVideos.length > 0)
+				currentLocation = window.location.href;
+			}
+		}
+
+		if(existingVideos < 1){
+			setTimeout(() => frameListener());
+			return;
 		}
 
 		let activate = true;
@@ -74,11 +159,15 @@ try{
 			activate = false;
 
 		if(activateListener !== activate){
-			if(!activate)
+			if(!activate){
 				focusOnOffVideo(false)
+				faceDetectionFocus = false
+			}
 
-			if(autoPauseOnFullScreenChange && isFullscreen)
-				focusOnOffFullscreenVideo(true)
+			if(!enableFaceTrackng && autoPauseOnFullScreenChange && isFullscreen){
+				focusOnOffVideo(true)
+				faceDetectionFocus = true
+			}
 
 			activateListener = activate;
 			switchInteract = false;
@@ -94,23 +183,25 @@ try{
 
 				if(faceDetectionFocus){
 
-					if(autoResume && switchInteract){
-						if(!isFullscreen)
-							focusOnOffVideo(true)
-						else
-							focusOnOffFullscreenVideo(true)
+					if(autoResume){
+						focusOnOffVideo(true)
+						// if(!isFullscreen)
+						// 	focusOnOffVideo(true)
+						// else
+						// 	focusOnOffFullscreenVideo(true)
 					}
 				}
 				else{
-					if(!isFullscreen)
-						focusOnOffVideo(false)
-					else
-						focusOnOffFullscreenVideo(false)
+					focusOnOffVideo(false)
+					// if(!isFullscreen)
+					// 	focusOnOffVideo(false)
+					// else
+					// 	focusOnOffFullscreenVideo(false)
 				}
 			}
 		}
 
-		setTimeout(() => frameListener(focusOnOffFullscreenVideo, focusOnOffVideo));
+		setTimeout(() => frameListener());
 	}
 
 	const loadAndRunController = async() => {
@@ -119,20 +210,12 @@ try{
 
 		if(webCamOn){
 			console.log("This page is streaming, not valid for video focus action");
+			pageInit(false)
 			return;
 		}
 
-		console.log("Load controller.js...")
-		const controller = chrome.runtime.getURL('lib/controller.js');
-
-		if(!controller){
-			console.log("Failed to load controller.js")
-			alert("Failed to load controller.js")
-			return;
-		}
-
-		const { focusOnOffFullscreenVideo, focusOnOffVideo, searchVideos, searchFullscreenVideos } = await import(controller);
-		console.log("Load controller.js successfully")
+		existingVideos = searchVideos();
+		pageInit(existingVideos.length > 0)
 
 		// https://github.com/GoogleChrome/chrome-extensions-samples/issues/821#issuecomment-1680300556
 		// const hiddenTrackerPage = chrome.runtime.getURL("tracker.html");
@@ -147,13 +230,13 @@ try{
 
 		// check user interaction
 		document.addEventListener('mousedown', () => {
-			interact = true
+			initInteract = true
 			switchInteract = true
 		})
 
 		// check user interaction
 		document.addEventListener('keydown', () => {
-			interact = true
+			initInteract = true
 			switchInteract = true
 		})
 	
@@ -163,41 +246,51 @@ try{
 
 		document.addEventListener('visibilitychange', () => {
 			isVisible = document.visibilityState !== "hidden"
+			if(isVisible){
+				existingVideos = searchVideos();
+				pageInit(existingVideos.length > 0)
+			}
+			else{
+				setIsTrackable(false)
+			}
 		})
 
 		// listen to settings and tracking informations
 		chrome.storage.onChanged.addListener((changes, area) => {
-			autoPlay = changes?.['video-focus.paused'] ? changes?.['video-focus.paused'].newValue : autoPlay;
+			if(chrome.runtime.lastError){
+				console.log(`chrome.storage.onChanged: ${chrome.runtime.lastError.message}`);
+				return;
+			}
+
+			console.log(window.tabId)
+			console.log(changes)
+
+			autoPlay = changes?.['video-focus.autoPlay'] ? changes?.['video-focus.autoPlay'].newValue : autoPlay;
 			paused = changes?.['video-focus.paused'] ? changes?.['video-focus.paused'].newValue : paused;
 			enableFaceTrackng = changes?.['video-focus.enableFaceTrackng'] ? changes?.['video-focus.enableFaceTrackng'].newValue : enableFaceTrackng;
 			enableFaceTrackngFullScreenOnly = changes?.['video-focus.enableFaceTrackngFullScreenOnly'] ? changes?.['video-focus.enableFaceTrackngFullScreenOnly'].newValue : enableFaceTrackngFullScreenOnly;
 			autoPauseOnFullScreenChange = changes?.['video-focus.autoPauseOnFullScreenChange'] ? changes?.['video-focus.autoPauseOnFullScreenChange'].newValue : autoPauseOnFullScreenChange;
 			autoPauseOnSwitchTab = changes?.['video-focus.autoPauseOnSwitchTab'] ? changes?.['video-focus.autoPauseOnSwitchTab']?.newValue : autoPauseOnSwitchTab;
 			autoResume = changes?.['video-focus.autoResume'] ? changes?.['video-focus.autoResume'].newValue : autoResume;
-	
-			// if(!paused)
-			// 	return;
 
-			// if(autoPauseOnSwitchTab && document.visibilityState === "hidden")
-			// 	return;
-			
-			// if(autoPauseOnFullScreenChange && !document.fullscreenElement)
-			// 	return;
-			
+			if(changes["video-focus.tabPauseMapping"] !== undefined){
+				tabPauseMapping = changes["video-focus.tabPauseMapping"].newValue
+			}
+
 			if(changes["video-focus.faceDetectionFocus"] !== undefined){
 				faceDetectionFocus = !!changes["video-focus.faceDetectionFocus"].newValue
-			}
-		
+			}		
 		});
 
 		isVisible = document.visibilityState !== "hidden"
 		isFullscreen = !!document.fullscreenElement
 
-		frameListener(focusOnOffFullscreenVideo, focusOnOffVideo, searchVideos, searchFullscreenVideos)
+		frameListener()
 	}
 
 	chrome.storage.local.get([
 		'video-focus.paused',
+		'video-focus.tabPauseMapping',
 		'video-focus.enableFaceTrackng',
 		'video-focus.enableFaceTrackngFullScreenOnly',
 		'video-focus.autoPlay',
@@ -205,9 +298,13 @@ try{
 		'video-focus.autoPauseOnSwitchTab',
 		'video-focus.autoResume',
 	]).then(async(storage) => {
+		if(chrome.runtime.lastError)
+			console.log(`chrome.storage.local: ${chrome.runtime.lastError.message}`);
+
 		console.log(storage)
 		autoPlay = storage?.['video-focus.autoPlay'] ?? false;
 		paused = storage?.['video-focus.paused'] ?? false;
+		tabPauseMapping = storage?.["video-focus.tabPauseMapping"] ?? storage?.["video-focus.tabPauseMapping"]
 		enableFaceTrackng = storage?.['video-focus.enableFaceTrackng'] ?? false;
 		enableFaceTrackngFullScreenOnly = storage?.['video-focus.enableFaceTrackngFullScreenOnly'] ?? true;
 		autoPauseOnFullScreenChange = storage?.['video-focus.autoPauseOnFullScreenChange'] ?? false;
