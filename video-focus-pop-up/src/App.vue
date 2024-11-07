@@ -249,7 +249,7 @@
 <template>
   <div class="layout">
     <LoadingOverlay :show="loading"/>
-    <div class="header"> Video Focus Settings {{ activeTab }} </div>
+    <div class="header"> Video Focus Settings </div>
     <div class="settings">
       <SwitchListItem
         name="Disable all features"
@@ -257,11 +257,11 @@
         :change="(value) => setHasChange(() => paused = value)"
       />
       <SubTitleExpandable
+        v-if="activeTab !== -1"
         name="Local Setting"
       >
         <SwitchListItem
           name="Disable on current tab"
-          :disabled="activeTab === -1"
           :value="disableOnThisTab"
           :change="(value) => setHasChange(() => disableOnThisTab = value)"
         />
