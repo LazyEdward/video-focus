@@ -9,7 +9,7 @@ try{
 			let stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
 	
 			if(!stream)
-				throw Error()
+				throw Error("Webcam not found")
 	
 			console.log('Webcam permission is given')
 			// console.log(stream)
@@ -17,6 +17,8 @@ try{
 			stream.removeTrack(stream.getVideoTracks()[0]);
 
 			// chrome.tabs.create({ url: chrome.runtime.getURL("tracker.html") })
+
+			if(chrome.runtime.id == undefined) return;
 
 			chrome.runtime.sendMessage({
 				type: 'permissionGranted',
@@ -29,6 +31,8 @@ try{
 			// alert('Webcam permission is not given')
 			console.log('Webcam permission is not given')
 			console.log(err)
+
+			if(chrome.runtime.id == undefined) return;
 
 			chrome.runtime.sendMessage({
 				type: 'permissionGranted',

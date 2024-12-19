@@ -33,6 +33,18 @@ let videoEle = null;
 let canvas = null;
 let eleInactiveWarning = null;
 
+const getTop = (l) => {
+	return l
+		.map((a) => a.y)
+		.reduce((a, b) => Math.min(a, b));
+}
+
+const getMeanPosition = (l) => {
+	return l.map((a) => [a.x, a.y])
+		.reduce((a, b) => [a[0] + b[0], a[1] + b[1]])
+		.map((a) => a / l.length)
+}
+
 const initFetchSetting = () => {
 	chrome.runtime.sendMessage({
 		type: 'fetchSetting',
@@ -69,15 +81,31 @@ const detectFocus = async(update) => {
 		// & https://justadudewhohacks.github.io/face-api.js/docs/globals.html#facedetectionoptions
 		// console.log(`detectSingleFace start: ${Date.now()}`);
 
+		// https://github.com/justadudewhohacks/face-api.js/issues/724
 		const result = await faceapi.detectSingleFace(
 			videoEle, 
 			defaultDetector === "tiny_face" ? 
 				new faceapi.TinyFaceDetectorOptions({inputSize, scoreThreshold})
 			: new faceapi.SsdMobilenetv1Options({minConfidence})
 		)
+		// ).withFaceLandmarks()
+
+		// console.log(result);
+
+		// if(!!result){
+		// 	let eye_right = getMeanPosition(result["landmarks"].getRightEye());
+		// 	let eye_left = getMeanPosition(result["landmarks"].getLeftEye());
+		// 	let nose = getMeanPosition(result["landmarks"].getNose());
+		// 	let mouth= getMeanPosition(result["landmarks"].getMouth());
+		// 	let jaw = getTop(result["landmarks"].getJawOutline());
+			
+		// 	let rotationVertical = (jaw - mouth) / result["detection"]["_box"]["_height"];
+		// 	let rotationHorizontal = (eye_left[0] + (eye_right[0] - eye_left[0]) / 2 - nose[0]) / result["detection"]["_box"]["_width"];
+
+		// 	console.log(rotationVertical, rotationHorizontal)
+		// }
 
 		if(isFocus !== !!result){
-			// console.log(result);
 
 			// if(!!result){
 			// 	availableShotData = {
@@ -273,6 +301,7 @@ const cleanUp = async() => {
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 	}
 
+	isFocus = null
 	init = false
 	if(stream){
 		let stoppingStream = new Promise((resolve) => {
@@ -304,8 +333,12 @@ const loadFocusDetection = async() => {
 
 	let tinyFacemodelLink = chrome.runtime.getURL('lib/tiny_face_detector_model.weights');
 	let ssdMobilemodelLink = chrome.runtime.getURL('lib/ssd_mobilenetv1.weights');
+	// let facelandmark = chrome.runtime.getURL('lib/face_landmark_68_model.weights');
 
-	if(!tinyFacemodelLink || !ssdMobilemodelLink){
+	// await faceapi.loadFaceLandmarkModel('/models')
+	// await faceapi.loadFaceLandmarkTinyModel('/models')
+
+	if(!tinyFacemodelLink || !ssdMobilemodelLink || !facelandmark){
 		console.log("Failed to faceapi model link")
 		return;
 	}
@@ -325,6 +358,12 @@ const loadFocusDetection = async() => {
 		return
 	}
 
+	// await faceapi.nets.faceLandmark68Net.load(await faceapi.fetchNetWeights(facelandmark));
+	
+	// if(!faceapi.nets.faceLandmark68Net.params){
+	// 	console.log("Failed to faceapi model link")
+	// 	return
+	// }
 
 	chrome.runtime.onMessage.addListener((req, sender, sendRes) => {
 		if(chrome.runtime.lastError){

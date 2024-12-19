@@ -83,17 +83,23 @@ try{
 	}
 	
 	const pageInit = (trackable) => {
-		if(chrome.runtime.id == undefined) return;
-
-		chrome.storage.local.set({
-			"video-focus.trackingAvailable": trackable
-		});
+		setIsTrackable(trackable)
+		setVisibleActive();
 	}
 	
 	const setIsTrackable = (trackable) => {
 		if(chrome.runtime.id == undefined) return;
 		
 		chrome.storage.local.set({ "video-focus.trackingAvailable": trackable });
+	}
+
+	const setVisibleActive = () => {
+		// console.log(window.tabId, isVisible)
+
+		if(!isVisible || !window.tabId) return;
+		if(chrome.runtime.id == undefined) return;
+		
+		chrome.storage.local.set({ "video-focus.activeTab": window.tabId });
 	}
 
 	const checkIsWebCamOn = async() => {
@@ -113,8 +119,7 @@ try{
 			return;
 		}
 
-		console.log(tabPauseMapping, window.tabId, tabPauseMapping[window.tabId])
-		if(!!tabPauseMapping && !!window.tabId && tabPauseMapping[window.tabId]){
+		if(!!tabPauseMapping && !!window.tabId && !!tabPauseMapping[window.tabId]){
 			setTimeout(() => frameListener());
 			return;
 		}
@@ -122,8 +127,8 @@ try{
 		if(!autoPlay){
 			if(currentLocation !== window.location.href){
 				initInteract = false;
-				existingVideos = searchVideos();
-				setIsTrackable(existingVideos.length > 0)
+				// existingVideos = searchVideos();
+				// setIsTrackable(existingVideos.length > 0)
 				currentLocation = window.location.href;
 				setTimeout(() => frameListener());
 				return;
@@ -137,8 +142,8 @@ try{
 		}
 		else{
 			if(currentLocation !== window.location.href){
-				existingVideos = searchVideos();
-				setIsTrackable(existingVideos.length > 0)
+				// existingVideos = searchVideos();
+				// setIsTrackable(existingVideos.length > 0)
 				currentLocation = window.location.href;
 			}
 		}
@@ -214,8 +219,11 @@ try{
 			return;
 		}
 
+		isVisible = document.visibilityState !== "hidden"
+		isFullscreen = !!document.fullscreenElement
+
 		existingVideos = searchVideos();
-		pageInit(existingVideos.length > 0)
+		pageInit(true)
 
 		// https://github.com/GoogleChrome/chrome-extensions-samples/issues/821#issuecomment-1680300556
 		// const hiddenTrackerPage = chrome.runtime.getURL("tracker.html");
@@ -247,11 +255,7 @@ try{
 		document.addEventListener('visibilitychange', () => {
 			isVisible = document.visibilityState !== "hidden"
 			if(isVisible){
-				existingVideos = searchVideos();
-				pageInit(existingVideos.length > 0)
-			}
-			else{
-				setIsTrackable(false)
+				pageInit(true)
 			}
 		})
 
@@ -282,14 +286,12 @@ try{
 			}		
 		});
 
-		isVisible = document.visibilityState !== "hidden"
-		isFullscreen = !!document.fullscreenElement
-
 		frameListener()
 	}
 
 	chrome.storage.local.get([
 		'video-focus.paused',
+		'video-focus.faceDetectionFocus',
 		'video-focus.tabPauseMapping',
 		'video-focus.enableFaceTrackng',
 		'video-focus.enableFaceTrackngFullScreenOnly',
@@ -301,7 +303,9 @@ try{
 		if(chrome.runtime.lastError)
 			console.log(`chrome.storage.local: ${chrome.runtime.lastError.message}`);
 
+		console.log(window.tabId)
 		console.log(storage)
+
 		autoPlay = storage?.['video-focus.autoPlay'] ?? false;
 		paused = storage?.['video-focus.paused'] ?? false;
 		tabPauseMapping = storage?.["video-focus.tabPauseMapping"] ?? storage?.["video-focus.tabPauseMapping"]
@@ -310,6 +314,8 @@ try{
 		autoPauseOnFullScreenChange = storage?.['video-focus.autoPauseOnFullScreenChange'] ?? false;
 		autoPauseOnSwitchTab = storage?.['video-focus.autoPauseOnSwitchTab'] ?? false;
 		autoResume = storage?.['video-focus.autoResume'] ?? false;
+
+		faceDetectionFocus = storage?.['video-focus.faceDetectionFocus'] ?? false;
 
 		await loadAndRunController();
 	})

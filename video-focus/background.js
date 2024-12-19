@@ -5,7 +5,8 @@
 
 try{
 
-	let activeTab = -1;
+	let activeTab = -1
+	let sessionTabs = {};
 	let permissionTab = -1;
 	let creatingOffscreen = null;
 
@@ -157,11 +158,12 @@ try{
 			}
 			
 			chrome.storage.local.set({ "video-focus.activeTab": -1, "video-focus.tabPauseMapping": {}, "video-focus.faceDetectionFocus": false, "video-focus.trackingAvailable": false });
+			sessionTabs = {}
 			permissionTab = -1
 			hasPermission = false
 
 			await setupOffscreenDocument('tracker.html')
-			await requestPermission();
+			// await requestPermission();
 		})
 	}
 
@@ -175,11 +177,13 @@ try{
 		console.log("Background Start Up");
 		if(details.reason !== "install" && details.reason !== "update") return;
 		await init()
-		
+
 		chrome.tabs.query({}, async(tabs) => {
-			for(let tab of tabs){				
-				if (tab.status === "complete"){
-					if(tab.url.startsWith("http://") || tab.url.startsWith("https://")){
+			let orderedTabs = tabs.filter(tab => tab.status === "complete").sort((a, b) => !a.active - !b.active)
+			// console.log(orderedTabs)
+			for(let tab of orderedTabs){
+				if(tab.url.startsWith("http://") || tab.url.startsWith("https://")){
+					try{
 						await chrome.scripting.executeScript({
 							target: { tabId: tab.id },
 							args: [tab.id],
@@ -187,15 +191,12 @@ try{
 								window.tabId = id;
 							}
 						});
-						chrome.scripting.executeScript({ target: { tabId: tab.id }, files : [ "content.js" ], }).then(() => {
-							if(chrome.runtime.lastError)
-								console.log(`chrome.scripting.executeScript: ${chrome.runtime.lastError.message}`);
-							else
-								console.log("content script injected")
-						});
-
-						if(tab.active)
-							chrome.storage.local.set({ "video-focus.activeTab": tab.id });						
+						await chrome.scripting.executeScript({ target: { tabId: tab.id }, files : [ "content.js" ], })
+						console.log(`content script injected ${tab.id}`)
+					}
+					catch(e){
+						console.log(`content script injection error ${tab.id}`)
+						console.log(e)
 					}
 				}
 			}
@@ -208,58 +209,164 @@ try{
 			return;
 		}
 
-		
 		if (changeInfo.status === "complete"){
 			if(tab.url.startsWith("http://") || tab.url.startsWith("https://")){
-				await chrome.scripting.executeScript({
-					target: { tabId },
-					args: [tabId],
-					func: (id) => {
-						window.tabId = id;
-					}
-				});
-				chrome.scripting.executeScript({ target: { tabId }, files : [ "content.js" ], }).then(() => {
-					if(chrome.runtime.lastError)
-						console.log(`chrome.scripting.executeScript: ${chrome.runtime.lastError.message}`);
-					else
-						console.log("content script injected")
-				});
-
-				if(tab.active)
-					chrome.storage.local.set({ "video-focus.activeTab": tabId });
-				else
-					chrome.storage.local.set({ "video-focus.activeTab": -1 });
+				try{
+					await chrome.scripting.executeScript({
+						target: { tabId: tab.id },
+						args: [tab.id],
+						func: (id) => {
+							window.tabId = id;
+						}
+					});
+					sessionTabs[tab.id] = true
+					await chrome.scripting.executeScript({ target: { tabId }, files : [ "content.js" ], });
+					console.log(`content script injected ${tabId}`)		
+				}
+				catch(e){
+					console.log(`content script injection error ${tabId}`)
+					console.log(e)
+				}
 			}
-			// else{
-			// 	chrome.storage.local.set({ "video-focus.trackingAvailable": false });
-			// }
+			else{
+				if(sessionTabs[tabId])
+					delete sessionTabs[tabId]
+			}
+			console.log(sessionTabs)
 		}
 	})
 
-	chrome.tabs.onActivated.addListener((activeInfo) => {
+	chrome.tabs.onActivated.addListener(async(activeInfo) => {
 		if(chrome.runtime.lastError){
 			console.log(`chrome.tabs.onActivated: ${chrome.runtime.lastError.message}`);
 			return;
 		}
 
-		chrome.tabs.get(activeInfo.tabId, (tab) => {
+		chrome.tabs.get(activeInfo.tabId, async(tab) => {
 			if(chrome.runtime.lastError){
 				console.log(`chrome.tabs.get: ${chrome.runtime.lastError.message}`);
 				return;
-			}	
+			}		
+
+			console.log('chrome.tabs.onActivated')
+			console.log(tab)
 
 			if(tab.url.startsWith("http://") || tab.url.startsWith("https://")){
-				console.log(tab)
-				chrome.storage.local.set({ "video-focus.activeTab": activeInfo.tabId });
+				if(!sessionTabs[activeInfo.tabId]){
+					try{
+						await chrome.scripting.executeScript({
+							target: { tabId: tab.id },
+							args: [tab.id],
+							func: (id) => {
+								window.tabId = id;
+							}
+						});
+						await chrome.scripting.executeScript({ target: { tabId: tab.id }, files : [ "content.js" ], });
+						console.log(`content script injected ${tab.id}`)
+					}
+					catch(e){
+						console.log(`content script injection error ${activeInfo.tabId}`)
+						console.log(e)
+					}
+				}
 			}
 			else{
-				chrome.storage.local.set({ "video-focus.activeTab": -1 });
+				chrome.storage.local.set({ "video-focus.activeTab": -1 })
+				activeTab = -1
+				if(sessionTabs[activeInfo.tabId])
+					delete sessionTabs[activeInfo.tabId]
 			}
+			console.log(sessionTabs)
 		})
+	})
+
+	chrome.windows.onFocusChanged.addListener((windowId) => {
+		if(chrome.runtime.lastError){
+			console.log(`chrome.tabs.onFocusChanged: ${chrome.runtime.lastError.message}`);
+			return;
+		}
+
+		if(windowId === chrome.windows.WINDOW_ID_NONE){
+			setTimeout(() => {
+				if(activeTab === -1)
+					chrome.storage.local.set({ "video-focus.trackingAvailable": false })
+			}, 5000)
+			return;
+		}
+
+		chrome.tabs.query({active: true, windowId}, async(tabs) => {
+			if(tabs.length > 0 && tabs[0]){
+				let tab = tabs[0]
+				// console.log('chrome.windows.onFocusChanged')
+				// console.log(tab)
+				if (tab.status === "complete"){
+					if(tab.url.startsWith("http://") || tab.url.startsWith("https://")){
+						if(!sessionTabs[tab.id]){
+							try{
+								await chrome.scripting.executeScript({
+									target: { tabId: tab.id },
+									args: [tab.id],
+									func: (id) => {
+										window.tabId = id;
+									}
+								});
+								await chrome.scripting.executeScript({ target: { tabId: tab.id }, files : [ "content.js" ], });
+								console.log(`content script injected ${tab.id}`)
+							}
+							catch(e){
+								console.log(`content script injection error ${tab.id}`)
+								console.log(e)
+							}
+						}
+					}
+					else{
+						chrome.storage.local.set({ "video-focus.activeTab": -1 })
+						activeTab = -1
+						if(sessionTabs[tab.tabId])
+							delete sessionTabs[tab.tabId]
+					}
+				}
+			}
+			console.log(sessionTabs)
+		})
+
+	}, {windowTypes: ['normal']})
+
+	chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+		if(chrome.runtime.lastError){
+			console.log(`chrome.tabs.onRemoved: ${chrome.runtime.lastError.message}`);
+			return;
+		}
+
+		if(sessionTabs[tabId]){
+			delete sessionTabs[tabId]
+			chrome.storage.local.get([
+				'video-focus.tabPauseMapping',
+			]).then(async(storage) => {
+				if(chrome.runtime.lastError)
+					console.log(`chrome.storage.local: ${chrome.runtime.lastError.message}`);
+				
+				let tabPauseMapping = {...storage['video-focus.tabPauseMapping']}
+				delete tabPauseMapping[tabId]
+
+				chrome.storage.local.set({ "video-focus.tabPauseMapping": tabPauseMapping });
+			})
+		}
 	})
 
 	chrome.storage.onChanged.addListener(async(changes, area) => {
 		console.log(changes)
+
+		if(changes['video-focus.activeTab']){
+			if(changes['video-focus.activeTab'].newValue !== -1){
+				sessionTabs[changes['video-focus.activeTab'].newValue] = true
+				activeTab = changes['video-focus.activeTab'].newValue
+			}
+			else
+				activeTab = -1
+
+			console.log(sessionTabs)
+		}
 
 		if(changes['video-focus.enableFaceTrackng'] || changes['video-focus.trackingAvailable']){
 			if(hasPermission){

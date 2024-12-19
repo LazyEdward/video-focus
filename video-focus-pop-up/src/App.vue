@@ -27,7 +27,6 @@
   type TVideoFocusUpdateStorage = {
     "video-focus.paused": boolean,
     "video-focus.tabPauseMapping": Record<number,boolean>,
-    "video-focus.trackingAvailable": boolean,
     "video-focus.defaultDetector": string,
     "video-focus.inputSize": number,
     "video-focus.scoreThreshold": number,
@@ -184,7 +183,6 @@
       'video-focus.paused': paused.value,
       'video-focus.activeTab': activeTab.value,
       'video-focus.tabPauseMapping': tabPauseMapping.value,
-      'video-focus.trackingAvailable': trackingAvailable.value,
       'video-focus.defaultDetector': defaultDetector.value,
       'video-focus.inputSize': inputSize.value,
       'video-focus.scoreThreshold': scoreThreshold.value,
@@ -212,7 +210,6 @@
     await setVideoFocusStorage({
         'video-focus.paused': paused.value,
         'video-focus.tabPauseMapping': updateTabPauseMapping,
-        'video-focus.trackingAvailable': trackingAvailable.value,
         'video-focus.defaultDetector': defaultDetector.value,
         'video-focus.inputSize': inputSize.value,
         'video-focus.scoreThreshold': scoreThreshold.value,
@@ -254,7 +251,7 @@
       <SwitchListItem
         name="Disable all features"
         :value="paused"
-        :change="(value) => setHasChange(() => paused = value)"
+        :change="(value:boolean) => setHasChange(() => paused = value)"
       />
       <SubTitleExpandable
         v-if="activeTab !== -1"
@@ -263,7 +260,7 @@
         <SwitchListItem
           name="Disable on current tab"
           :value="disableOnThisTab"
-          :change="(value) => setHasChange(() => disableOnThisTab = value)"
+          :change="(value:boolean) => setHasChange(() => disableOnThisTab = value)"
         />
       </SubTitleExpandable>
       <SubTitleExpandable
@@ -273,19 +270,19 @@
           name="Video autoplay"
           :disabled="paused"
           :value="autoPlay"
-          :change="(value) => setHasChange(() => autoPlay = value)"
+          :change="(value:boolean) => setHasChange(() => autoPlay = value)"
         />
         <SwitchListItem
           name="Pause video on Exit FullScreen"
           :disabled="paused"
           :value="autoPauseOnFullScreenChange"
-          :change="(value) => setHasChange(() => autoPauseOnFullScreenChange = value)"
+          :change="(value:boolean) => setHasChange(() => autoPauseOnFullScreenChange = value)"
         />
         <SwitchListItem
           name="Pause video on Tab loss focus"
           :disabled="paused"
           :value="autoPauseOnSwitchTab"
-          :change="(value) => setHasChange(() => autoPauseOnSwitchTab = value)"
+          :change="(value:boolean) => setHasChange(() => autoPauseOnSwitchTab = value)"
         />
       </SubTitleExpandable>
       <SubTitleExpandable
@@ -297,7 +294,7 @@
             name="Enable Tracking"
             :disabled="paused"
             :value="enableFaceTrackng"
-            :change="(value) => setHasChange(() => enableFaceTrackng = value)"
+            :change="(value:boolean) => setHasChange(() => enableFaceTrackng = value)"
           />
         </div>
         <LinkItem
@@ -309,20 +306,20 @@
           name="In Full Screen Only"
           :disabled="paused || !enableFaceTrackng"
           :value="enableFaceTrackngFullScreenOnly"
-          :change="(value) => setHasChange(() => enableFaceTrackngFullScreenOnly = value)"
+          :change="(value:boolean) => setHasChange(() => enableFaceTrackngFullScreenOnly = value)"
         />
         <SwitchListItem
           name="Auto resume video"
           :disabled="paused || !enableFaceTrackng"
           :value="autoResume"
-          :change="(value) => setHasChange(() => autoResume = value)"
+          :change="(value:boolean) => setHasChange(() => autoResume = value)"
         />
         <SelectListItem
           name="Detector Option"
           :disabled="paused || !enableFaceTrackng"
           :value="defaultDetector"
-          :options="DETECTOR_OPTIONS.map(v => ({label: DETECTOR_OPTIONS_NAME[v], value: v}))"
-          :change="(value) => setHasChange(() => defaultDetector = value as string)"
+          :options="DETECTOR_OPTIONS.map((v:string) => ({label: DETECTOR_OPTIONS_NAME[v], value: v}))"
+          :change="(value: string | number) => setHasChange(() => defaultDetector = value as string)"
         />
         <SubTitleExpandable
           name="Tiny face Setting"
@@ -331,8 +328,8 @@
             name="Input Size"
             :disabled="paused || !enableFaceTrackng || (defaultDetector !== 'tiny_face')"
             :value="inputSize"
-            :options="FACE_TRACKING_INPUT_SIZE_OPTIONS.map(v => ({label: '' + v, value: v}))"
-            :change="(value) => setHasChange(() => inputSize = value as number)"
+            :options="FACE_TRACKING_INPUT_SIZE_OPTIONS.map((v:number) => ({label: '' + v, value: v}))"
+            :change="(value: string | number) => setHasChange(() => inputSize = value as number)"
           />
           <CounterListItem
             name="Score threshold"
@@ -341,7 +338,7 @@
             :min="0"
             :max="1"
             :step-size=".1"
-            :change="(value) => setHasChange(() => scoreThreshold = value)"
+            :change="(value: string | number) => setHasChange(() => scoreThreshold = value as number)"
           />
         </SubTitleExpandable>
         <SubTitleExpandable
@@ -354,7 +351,7 @@
             :min="0"
             :max="1"
             :step-size=".1"
-            :change="(value) => setHasChange(() => minConfidence = value)"
+            :change="(value:number) => setHasChange(() => minConfidence = value as number)"
           />
         </SubTitleExpandable>
       </SubTitleExpandable>
