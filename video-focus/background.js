@@ -5,6 +5,9 @@
 
 try{
 
+	let trackerTab = -1
+	let tackerActive = false
+	
 	let activeTab = -1
 	let sessionTabs = {};
 	let permissionTab = -1;
@@ -25,10 +28,13 @@ try{
 			await requestPermission();
 		}
 
-		chrome.tabs.create({ url: 'tracker.html' }, () => {
+		chrome.tabs.create({ url: 'tracker.html' }, (tab) => {
 			if(chrome.runtime.lastError){
 				console.log(`chrome.tabs.create: ${chrome.runtime.lastError.message}`);
+				trackerTab = -1
 			}
+
+			trackerTab = parseInt(tab.id)
 		});
 	}
 
@@ -63,7 +69,7 @@ try{
 				creatingOffscreen = chrome.offscreen.createDocument({
 					url: path,
 					reasons: [ chrome.offscreen.Reason.USER_MEDIA ],
-					justification: "keep service worker running and record audio",
+					justification: "keep service worker running and record video",
 				});
 			}
 	
@@ -163,7 +169,9 @@ try{
 			hasPermission = false
 
 			await setupOffscreenDocument('tracker.html')
-			// await requestPermission();
+
+			if(enableFaceTrackng)
+				await requestPermission();
 		})
 	}
 
@@ -229,6 +237,11 @@ try{
 				}
 			}
 			else{
+				if((tab.url.startsWith("extension://") || tab.url.startsWith("chrome-extension://")) && tab.url.endsWith("tracker.html")){
+					chrome.storage.local.set({ "video-focus.trackingAvailable": true })
+					tackerActive = true
+				}
+
 				if(sessionTabs[tabId])
 					delete sessionTabs[tabId]
 			}
@@ -287,10 +300,10 @@ try{
 		}
 
 		if(windowId === chrome.windows.WINDOW_ID_NONE){
-			setTimeout(() => {
-				if(activeTab === -1)
-					chrome.storage.local.set({ "video-focus.trackingAvailable": false })
-			}, 5000)
+			// setTimeout(() => {
+			// 	if(!tackerActive && activeTab === -1)
+			// 		chrome.storage.local.set({ "video-focus.trackingAvailable": false })
+			// }, 5000)
 			return;
 		}
 
@@ -320,6 +333,11 @@ try{
 						}
 					}
 					else{
+						if((tab.url.startsWith("extension://") || tab.url.startsWith("chrome-extension://")) && tab.url.endsWith("tracker.html")){
+							chrome.storage.local.set({ "video-focus.trackingAvailable": true })
+							tackerActive = true
+						}
+
 						chrome.storage.local.set({ "video-focus.activeTab": -1 })
 						activeTab = -1
 						if(sessionTabs[tab.tabId])
@@ -336,6 +354,11 @@ try{
 		if(chrome.runtime.lastError){
 			console.log(`chrome.tabs.onRemoved: ${chrome.runtime.lastError.message}`);
 			return;
+		}
+
+		if(tabId === trackerTab){
+			trackerTab = -1
+			tackerActive = false
 		}
 
 		if(sessionTabs[tabId]){
@@ -439,7 +462,7 @@ try{
 							]).then(async(storage) => {
 								if(chrome.runtime.lastError)
 									console.log(`chrome.storage.local: ${chrome.runtime.lastError.message}`);
-	
+
 								chrome.runtime.sendMessage({
 									type: 'initSettings',
 									target: 'video-focus.initSettings',

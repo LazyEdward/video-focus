@@ -9,6 +9,7 @@
 
   type TVideoFocusReadStorage = {
     "video-focus.paused": boolean,
+    "video-focus.faceDetectionFocus": boolean,
     "video-focus.tabPauseMapping": Record<number,boolean>,
     "video-focus.activeTab": number,
     "video-focus.trackingAvailable": boolean,
@@ -88,6 +89,7 @@
     return new Promise((resolve) => {
       chrome.storage.local.get([
         'video-focus.paused',
+        'video-focus.faceDetectionFocus',
         'video-focus.tabPauseMapping',
         'video-focus.activeTab',
         'video-focus.trackingAvailable',
@@ -107,6 +109,7 @@
 
         resolve(storage ? {
           'video-focus.paused': storage['video-focus.paused'],
+          'video-focus.faceDetectionFocus': storage['video-focus.faceDetectionFocus'],
           'video-focus.tabPauseMapping': storage['video-focus.tabPauseMapping'],
           'video-focus.activeTab': storage['video-focus.activeTab'],
           'video-focus.trackingAvailable': storage['video-focus.trackingAvailable'],
@@ -155,6 +158,7 @@
 
     if(settings){
       paused.value = settings?.['video-focus.paused'] !== undefined ? settings['video-focus.paused'] : paused.value
+      faceDetectionFocus.value = settings?.['video-focus.faceDetectionFocus'] !== undefined ? settings['video-focus.faceDetectionFocus'] : faceDetectionFocus.value
       activeTab.value = settings?.['video-focus.activeTab'] !== undefined ? settings['video-focus.activeTab'] : activeTab.value
       tabPauseMapping.value = settings?.['video-focus.tabPauseMapping'] !== undefined ? settings['video-focus.tabPauseMapping'] : tabPauseMapping.value
       trackingAvailable.value = settings?.['video-focus.trackingAvailable'] !== undefined ? settings['video-focus.trackingAvailable'] : trackingAvailable.value
@@ -289,7 +293,7 @@
         name="Face Tracking Setting"
       >
         <div class="tracking-container">
-          <span class="tracking-status" :class="{ 'tracking-status-active': faceDetectionFocus}"/>
+          <span class="tracking-status" :class="{ 'tracking-status-active': faceDetectionFocus && enableFaceTrackng}"/>
           <SwitchListItem
             name="Enable Tracking"
             :disabled="paused"

@@ -7,7 +7,7 @@
 
 <script setup lang="ts">
 	type TSwitchListItem = {
-		disabled: boolean,
+		disabled?: boolean,
 		name: string,
 		value: boolean,
 		change: (value: boolean) => void

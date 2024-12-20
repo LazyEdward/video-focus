@@ -83,24 +83,30 @@ try{
 	}
 	
 	const pageInit = (trackable) => {
-		setIsTrackable(trackable)
-		setVisibleActive();
+		if(chrome.runtime.id == undefined) return;
+
+		let trackingAvailable = { "video-focus.trackingAvailable": trackable }
+		let activeTab = { }
+
+		if(isVisible && !!window.tabId){
+			activeTab = { "video-focus.activeTab": window.tabId }
+		}
+
+		chrome.storage.local.set({...trackingAvailable, ...activeTab})
 	}
 	
-	const setIsTrackable = (trackable) => {
-		if(chrome.runtime.id == undefined) return;
+	// const setIsTrackable = (trackable) => {
+	// 	if(chrome.runtime.id == undefined) return;
 		
-		chrome.storage.local.set({ "video-focus.trackingAvailable": trackable });
-	}
+	// 	chrome.storage.local.set({ "video-focus.trackingAvailable": trackable });
+	// }
 
-	const setVisibleActive = () => {
-		// console.log(window.tabId, isVisible)
-
-		if(!isVisible || !window.tabId) return;
-		if(chrome.runtime.id == undefined) return;
+	// const setVisibleActive = () => {
+	// 	if(!isVisible || !window.tabId) return;
+	// 	if(chrome.runtime.id == undefined) return;
 		
-		chrome.storage.local.set({ "video-focus.activeTab": window.tabId });
-	}
+	// 	chrome.storage.local.set({ "video-focus.activeTab": window.tabId });
+	// }
 
 	const checkIsWebCamOn = async() => {
 		let devices = await navigator.mediaDevices.enumerateDevices();
@@ -168,10 +174,11 @@ try{
 				focusOnOffVideo(false)
 				faceDetectionFocus = false
 			}
-
-			if(!enableFaceTrackng && autoPauseOnFullScreenChange && isFullscreen){
-				focusOnOffVideo(true)
-				faceDetectionFocus = true
+			else if(!enableFaceTrackng){
+				if((autoPauseOnFullScreenChange && isFullscreen) || (isVisible && autoPlay)){
+					focusOnOffVideo(true)
+					faceDetectionFocus = true
+				}
 			}
 
 			activateListener = activate;
@@ -254,9 +261,10 @@ try{
 
 		document.addEventListener('visibilitychange', () => {
 			isVisible = document.visibilityState !== "hidden"
-			if(isVisible){
+			if(isVisible)
 				pageInit(true)
-			}
+			else
+				isFullscreen = false
 		})
 
 		// listen to settings and tracking informations

@@ -105,7 +105,7 @@ const detectFocus = async(update) => {
 		// 	console.log(rotationVertical, rotationHorizontal)
 		// }
 
-		if(isFocus !== !!result){
+		if(isFocus === null || isFocus !== !!result){
 
 			// if(!!result){
 			// 	availableShotData = {
@@ -123,7 +123,7 @@ const detectFocus = async(update) => {
 				debugStatus.style.backgroundColor = !!result ? '#2cc321' : '#d72929'
 		}
 
-		if (document.visibilityState !== "hidden" && result) {
+		if (document.visibilityState !== "hidden" && !!result) {
 			const dims = faceapi.matchDimensions(canvas, videoEle, true)
 			faceapi.draw.drawDetections(canvas, faceapi.resizeResults(result, dims))
 		}
@@ -233,7 +233,8 @@ const startUp = async(data) => {
 	minConfidence = data?.['video-focus.minConfidence'] ?? minConfidence;
 
 	init = true
-	
+	isFocus = null
+
 	if(!stream)
 		await askWebcamPermission()
 
@@ -244,7 +245,7 @@ const startUp = async(data) => {
 		activeDetection = 0
 	}
 
-	activeDetection = detectFocus((result) => {
+	detectFocus((result) => {
 
 		chrome.runtime.sendMessage({
 			type: 'faceDetectionFocus',
@@ -272,7 +273,9 @@ const update = async(data) => {
 		activeDetection = 0
 	}
 
-	activeDetection = detectFocus((result) => {
+	isFocus = null
+	
+	detectFocus((result) => {
 
 		chrome.runtime.sendMessage({
 			type: 'faceDetectionFocus',
@@ -301,7 +304,6 @@ const cleanUp = async() => {
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 	}
 
-	isFocus = null
 	init = false
 	if(stream){
 		let stoppingStream = new Promise((resolve) => {
@@ -338,7 +340,7 @@ const loadFocusDetection = async() => {
 	// await faceapi.loadFaceLandmarkModel('/models')
 	// await faceapi.loadFaceLandmarkTinyModel('/models')
 
-	if(!tinyFacemodelLink || !ssdMobilemodelLink || !facelandmark){
+	if(!tinyFacemodelLink || !ssdMobilemodelLink){
 		console.log("Failed to faceapi model link")
 		return;
 	}
@@ -376,9 +378,11 @@ const loadFocusDetection = async() => {
 		if(req.target === "video-focus.initSettings" || req.target === "video-focus.updateSettings"){
 			let data = JSON.parse(req.data);
 
+			console.log(data)
+
 			isEnabled = !data['video-focus.paused'] 
-				&& data['video-focus.trackingAvailable']
-				&& data['video-focus.enableFaceTrackng']
+				&& data['video-focus.trackingAvailable'] !== false
+				&& !!data['video-focus.enableFaceTrackng']
 
 			if(init){
 				if(isEnabled)
